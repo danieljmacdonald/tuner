@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guitar Tuner</title>
+<style>
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #1e1e1e;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    margin: 0;
+    padding: 1rem;
+    box-sizing: border-box;
+  }
+
+  h1 {
+    margin: 0.5rem 0;
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  #current-note {
+    font-size: clamp(3rem, 12vw, 6rem);
+    margin: 1rem 0 1.5rem;
+    min-height: 1.2em;
+    line-height: 1;
+  }
+
+  .strings {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 600px;
+  }
+
+  button {
+    background: #444;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-size: clamp(0.9rem, 3vw, 1.1rem);
+    padding: 1rem 0.5rem;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    touch-action: manipulation;
+  }
+
+  button:hover {
+    background: #666;
+  }
+
+  button:active {
+    transform: scale(0.97);
+  }
+
+  button.active {
+    background: #ffcc00;
+    color: #000;
+  }
+</style>
+</head>
+<body>
+  <h1>Guitar Tuner</h1>
+  <div id="current-note"></div>
+
+  <div class="strings">
+    <button data-note="E4">High E</button>
+    <button data-note="B3">B</button>
+    <button data-note="G3">G</button>
+    <button data-note="D3">D</button>
+    <button data-note="A2">A</button>
+    <button data-note="E2">Low E</button>
+  </div>
+
+<script>
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+const noteFrequencies = {
+  'E2': 82.41,
+  'A2': 110.00,
+  'D3': 146.83,
+  'G3': 196.00,
+  'B3': 246.94,
+  'E4': 329.63
+};
+
+const activeNotes = {};
+const currentNoteDisplay = document.getElementById('current-note');
+
+function toggleNote(note, btn) {
+  if (activeNotes[note]) {
+    activeNotes[note].osc.stop();
+    activeNotes[note].harmonic.stop();
+    delete activeNotes[note];
+    btn.classList.remove('active');
+    currentNoteDisplay.textContent = '';
+  } else {
+    // Stop any other note
+    Object.keys(activeNotes).forEach(n => {
+      activeNotes[n].osc.stop();
+      activeNotes[n].harmonic.stop();
+      const otherBtn = document.querySelector(`button[data-note="${n}"]`);
+      otherBtn.classList.remove('active');
+      delete activeNotes[n];
+    });
+
+    const oscillator = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    oscillator.type = 'triangle';
+    oscillator.frequency.setValueAtTime(noteFrequencies[note], audioCtx.currentTime);
+
+    const harmonicOsc = audioCtx.createOscillator();
+    harmonicOsc.type = 'triangle';
+    harmonicOsc.frequency.setValueAtTime(noteFrequencies[note] * 2, audioCtx.currentTime);
+
+    const harmonicGain = audioCtx.createGain();
+    harmonicGain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+
+    harmonicOsc.connect(harmonicGain);
+    harmonicGain.connect(gainNode);
+    oscillator.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+    gainNode.gain.setValueAtTime(0, now);
+    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
+
+    oscillator.start();
+    harmonicOsc.start();
+
+    activeNotes[note] = { osc: oscillator, harmonic: harmonicOsc };
+    btn.classList.add('active');
+    currentNoteDisplay.textContent = note;
+  }
+}
+
+document.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const note = btn.getAttribute('data-note');
+    toggleNote(note, btn);
+  });
+});
+</script>
+</body>
+</html>
